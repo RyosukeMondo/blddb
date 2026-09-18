@@ -4,6 +4,8 @@
 
 Family numbers match the app atlas. Opposite directions share a family.
 
+Symmetry: 56 cases are a pure LR mirror of their partner's assigned alg, 360 differ, 24 are self-mirrored (both targets on the M plane).
+
 | # | Core operands | Cases | Inverse pairs |
 |---|---|---:|---:|
 | 1 | `[M', U2]` | 6 | 3 |

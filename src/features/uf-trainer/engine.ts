@@ -200,3 +200,366 @@ export function simplifyMoves(moves: string[]) {
   });
   return { moves: stack.map((s) => s.move), reductions };
 }
+
+// --- LR mirror symmetry (reflection across the M-slice plane). ---
+// Geometric, not string-based: negate the x coordinate (the L/R axis) of a
+// facelet's position and normal and look up whichever facelet actually sits
+// there. A character swap on the id alone is wrong for corners, whose two
+// adjacent-face letters are ordered U,L,F,R,B,D rather than by geometry.
+function reflectVec(v: Vec): Vec {
+  return [-v[0], v[1], v[2]];
+}
+export function mirrorFacelet(id: string): string {
+  const facelet = FACELETS.find((f) => f.id === id);
+  if (!facelet) {
+    throw new Error(`Unknown facelet: ${id}`);
+  }
+  const mirroredIndex = lookup.get(
+    key(reflectVec(facelet.position), reflectVec(facelet.normal)),
+  );
+  if (mirroredIndex === undefined) {
+    throw new Error(`No LR-mirrored facelet for ${id}`);
+  }
+  return FACELETS[mirroredIndex].id;
+}
+export function mirrorCycle(cycle: string[]): string[] {
+  return cycle.map(mirrorFacelet);
+}
+export function invertCycle(cycle: string[]): string[] {
+  return [cycle[0], ...cycle.slice(1).reverse()];
+}
+export function fullSequence(
+  setup: string[],
+  a: string[],
+  b: string[],
+): string[] {
+  return [
+    ...setup,
+    ...a,
+    ...b,
+    ...inverse(a),
+    ...inverse(b),
+    ...inverse(setup),
+  ];
+}
+export function simplifiedFullSequence(
+  setup: string[],
+  a: string[],
+  b: string[],
+): string[] {
+  return simplifyMoves(fullSequence(setup, a, b)).moves;
+}
+const BASE_MOVE_TOKENS = [
+  "R",
+  "L",
+  "U",
+  "D",
+  "F",
+  "B",
+  "M",
+  "E",
+  "S",
+  "r",
+  "l",
+  "u",
+  "d",
+  "f",
+  "b",
+  "x",
+  "y",
+  "z",
+];
+export const MOVE_TOKENS = BASE_MOVE_TOKENS.flatMap((m) => [
+  m,
+  `${m}'`,
+  `${m}2`,
+]);
+const homeIndex = new Map(FACELETS.map((f, i) => [f.id, i]));
+// The mirror of a whole cube state: every slot takes the mirror-relabelled
+// content of its own mirror-image slot.
+function reflectState(state: string[]): string[] {
+  return FACELETS.map((f) => {
+    const mirroredHomeId = mirrorFacelet(f.id);
+    const sourceIndex = homeIndex.get(mirroredHomeId);
+    if (sourceIndex === undefined) {
+      throw new Error(`No facelet for mirrored id ${mirroredHomeId}`);
+    }
+    return mirrorFacelet(state[sourceIndex]);
+  });
+}
+// For each of the 54 supported tokens t, mirrorMove(t) is the unique token m
+// with perm(m) = sigma ∘ perm(t) ∘ sigma, found by brute force rather than by
+// a hand-typed move table (M and x are fixed points; folklore "invert and
+// swap L/R" is wrong for them).
+function buildMirrorMoveTable(): Record<string, string> {
+  const byResult = new Map<string, string[]>();
+  MOVE_TOKENS.forEach((m) => {
+    const resultKey = execute([m]).join(",");
+    byResult.set(resultKey, [...(byResult.get(resultKey) || []), m]);
+  });
+  const table: Record<string, string> = {};
+  MOVE_TOKENS.forEach((token) => {
+    const target = reflectState(execute([token])).join(",");
+    const matches = byResult.get(target) || [];
+    if (matches.length !== 1) {
+      throw new Error(
+        `mirrorMove: expected exactly one LR-mirror match for ${token}, found ${matches.length}`,
+      );
+    }
+    table[token] = matches[0];
+  });
+  return table;
+}
+const MIRROR_MOVE_TABLE = buildMirrorMoveTable();
+export function mirrorMove(token: string): string {
+  const mirrored = MIRROR_MOVE_TABLE[token];
+  if (!mirrored) {
+    throw new Error(`Unsupported move: ${token}`);
+  }
+  return mirrored;
+}
+export function mirrorMoves(moves: string[]): string[] {
+  return moves.map(mirrorMove);
+}
+
+// --- Symmetry group / algorithm-variant computation. Pure and framework-free
+// so it is shared by the catalog generator, the catalog module and the
+// verification script, all of which need to run outside a bundler. ---
+export type SymmetryInfo = {
+  inverseId: string;
+  mirrorId: string;
+  mirrorInverseId: string;
+  inversePure: boolean;
+  mirrorPure: boolean;
+  mirrorInversePure: boolean;
+};
+export type CaseCore = {
+  id: string;
+  setup: string[];
+  a: string[];
+  b: string[];
+  cycle: string[];
+};
+function sameSequence(x: string[], y: string[]): boolean {
+  return x.length === y.length && x.every((m, i) => m === y[i]);
+}
+export function computeSymmetry(
+  entry: CaseCore,
+  // eslint-disable-next-line no-unused-vars -- parameter name describes the callback type
+  findCase: (id: string) => CaseCore | undefined,
+): SymmetryInfo {
+  const inverseId = invertCycle(entry.cycle).join("-");
+  const mirroredCycle = mirrorCycle(entry.cycle);
+  const mirrorId = mirroredCycle.join("-");
+  const mirrorInverseId = invertCycle(mirroredCycle).join("-");
+  const inversePartner = findCase(inverseId);
+  const mirrorPartner = findCase(mirrorId);
+  const mirrorInversePartner = findCase(mirrorInverseId);
+  if (!inversePartner || !mirrorPartner || !mirrorInversePartner) {
+    throw new Error(`Missing symmetry partner for case ${entry.id}`);
+  }
+  const own = fullSequence(entry.setup, entry.a, entry.b);
+  const invertedOwn = simplifyMoves(inverse(own)).moves;
+  const mirroredOwn = simplifyMoves(mirrorMoves(own)).moves;
+  const mirrorInvertedOwn = simplifyMoves(mirrorMoves(inverse(own))).moves;
+  const inversePure = sameSequence(
+    simplifiedFullSequence(
+      inversePartner.setup,
+      inversePartner.a,
+      inversePartner.b,
+    ),
+    invertedOwn,
+  );
+  const mirrorPure = sameSequence(
+    simplifiedFullSequence(
+      mirrorPartner.setup,
+      mirrorPartner.a,
+      mirrorPartner.b,
+    ),
+    mirroredOwn,
+  );
+  const mirrorInversePure = sameSequence(
+    simplifiedFullSequence(
+      mirrorInversePartner.setup,
+      mirrorInversePartner.a,
+      mirrorInversePartner.b,
+    ),
+    mirrorInvertedOwn,
+  );
+  return {
+    inverseId,
+    mirrorId,
+    mirrorInverseId,
+    inversePure,
+    mirrorPure,
+    mirrorInversePure,
+  };
+}
+
+export type SymmetryRelation = "self" | "inverse" | "mirror" | "mirrorInverse";
+export type SymmetryGroupEntry = {
+  relation: SymmetryRelation;
+  relations: SymmetryRelation[];
+  caseId: string;
+};
+export function computeSymmetryGroup(
+  entry: CaseCore & { symmetry: SymmetryInfo },
+): SymmetryGroupEntry[] {
+  const candidates: { relation: SymmetryRelation; caseId: string }[] = [
+    { relation: "self", caseId: entry.id },
+    { relation: "inverse", caseId: entry.symmetry.inverseId },
+    { relation: "mirror", caseId: entry.symmetry.mirrorId },
+    { relation: "mirrorInverse", caseId: entry.symmetry.mirrorInverseId },
+  ];
+  const relationsById = new Map<string, SymmetryRelation[]>();
+  const order: string[] = [];
+  candidates.forEach(({ relation, caseId }) => {
+    if (!relationsById.has(caseId)) {
+      relationsById.set(caseId, []);
+      order.push(caseId);
+    }
+    relationsById.get(caseId)?.push(relation);
+  });
+  return order.map((caseId) => {
+    const relations = relationsById.get(caseId) || [];
+    return { relation: relations[0], relations, caseId };
+  });
+}
+
+export type VariantRelation = "assigned" | SymmetryRelation;
+export type VariantProvenance = {
+  relation: VariantRelation;
+  fromCaseId: string;
+};
+export type AlgVariantCore = {
+  key: VariantRelation;
+  setup: string[];
+  a: string[];
+  b: string[];
+  provenance: VariantProvenance[];
+  pure: boolean;
+};
+// The four candidate algorithms that solve `entry`: its own assigned alg, the
+// inverse partner's alg with operands swapped, the mirror partner's alg
+// mirrored, and the mirror-inverse partner's alg mirrored-then-swapped.
+// Candidates whose simplified full sequence coincide are merged into one row;
+// a row that merges with "assigned" is how the pure-mirror / pure-inverse
+// badges arise.
+export function computeAlgVariants(
+  entry: CaseCore & { symmetry: SymmetryInfo },
+  // eslint-disable-next-line no-unused-vars -- parameter name describes the callback type
+  findCase: (id: string) => CaseCore | undefined,
+): AlgVariantCore[] {
+  const inversePartner = findCase(entry.symmetry.inverseId);
+  const mirrorPartner = findCase(entry.symmetry.mirrorId);
+  const mirrorInversePartner = findCase(entry.symmetry.mirrorInverseId);
+  if (!inversePartner || !mirrorPartner || !mirrorInversePartner) {
+    throw new Error(`Missing symmetry partner for algVariants(${entry.id})`);
+  }
+  const candidates: {
+    relation: VariantRelation;
+    fromCaseId: string;
+    setup: string[];
+    a: string[];
+    b: string[];
+  }[] = [
+    {
+      relation: "assigned",
+      fromCaseId: entry.id,
+      setup: entry.setup,
+      a: entry.a,
+      b: entry.b,
+    },
+    {
+      relation: "inverse",
+      fromCaseId: inversePartner.id,
+      setup: inversePartner.setup,
+      a: inversePartner.b,
+      b: inversePartner.a,
+    },
+    {
+      relation: "mirror",
+      fromCaseId: mirrorPartner.id,
+      setup: mirrorMoves(mirrorPartner.setup),
+      a: mirrorMoves(mirrorPartner.a),
+      b: mirrorMoves(mirrorPartner.b),
+    },
+    {
+      relation: "mirrorInverse",
+      fromCaseId: mirrorInversePartner.id,
+      setup: mirrorMoves(mirrorInversePartner.setup),
+      a: mirrorMoves(mirrorInversePartner.b),
+      b: mirrorMoves(mirrorInversePartner.a),
+    },
+  ];
+  const groups = new Map<
+    string,
+    {
+      setup: string[];
+      a: string[];
+      b: string[];
+      provenance: VariantProvenance[];
+    }
+  >();
+  const order: string[] = [];
+  candidates.forEach((candidate) => {
+    const seqKey = simplifiedFullSequence(
+      candidate.setup,
+      candidate.a,
+      candidate.b,
+    ).join(" ");
+    if (!groups.has(seqKey)) {
+      groups.set(seqKey, {
+        setup: candidate.setup,
+        a: candidate.a,
+        b: candidate.b,
+        provenance: [],
+      });
+      order.push(seqKey);
+    }
+    groups.get(seqKey)?.provenance.push({
+      relation: candidate.relation,
+      fromCaseId: candidate.fromCaseId,
+    });
+  });
+  const assignedKey = simplifiedFullSequence(
+    entry.setup,
+    entry.a,
+    entry.b,
+  ).join(" ");
+  return order.map((seqKey) => {
+    const group = groups.get(seqKey);
+    if (!group) {
+      throw new Error("Unreachable: missing alg-variant group");
+    }
+    return {
+      key: group.provenance[0].relation,
+      setup: group.setup,
+      a: group.a,
+      b: group.b,
+      provenance: group.provenance,
+      pure: seqKey === assignedKey,
+    };
+  });
+}
+
+// Shared default-variant policy, used by both the explore player and the
+// practice quiz so they agree on which algorithm is "current" for a case.
+export function defaultVariantKey(
+  variants: AlgVariantCore[],
+  preferMirror: boolean,
+): VariantRelation {
+  const assigned = variants.find((v) =>
+    v.provenance.some((p) => p.relation === "assigned"),
+  );
+  if (preferMirror) {
+    const mirror = variants.find(
+      (v) =>
+        v !== assigned && v.provenance.some((p) => p.relation === "mirror"),
+    );
+    if (mirror) {
+      return mirror.key;
+    }
+  }
+  return assigned ? assigned.key : variants[0].key;
+}

@@ -6,6 +6,8 @@ import {
   inverse,
   destination,
   solved,
+  computeSymmetry,
+  type SymmetryInfo,
 } from "../../src/features/uf-trainer/engine.ts";
 import commutator from "../../src/utils/commutator.ts";
 import tracer from "../../src/utils/tracer.ts";
@@ -33,6 +35,7 @@ type Entry = {
   sourceNotation: string;
   familyId: string;
   derivedInverse: boolean;
+  symmetry?: SymmetryInfo;
 };
 const entries: Entry[] = [];
 const home = solved(),
@@ -113,6 +116,31 @@ for (const options of pairs.values()) {
   });
 }
 assert.equal(new Set(chosen.map((e) => e.id)).size, 440);
+// LR-mirror / inverse symmetry: every case's group of related algorithms and
+// whether its assigned alg happens to already be the pure mirror/inverse of
+// its partner's, computed generically from engine.ts rather than hand-typed.
+const byId = new Map(chosen.map((e) => [e.id, e]));
+const findCase = (id: string) => byId.get(id);
+let mirrorPureCount = 0,
+  mirrorDifferentCount = 0,
+  selfMirrorCount = 0;
+for (const e of chosen) {
+  const symmetry = computeSymmetry(e, findCase);
+  e.symmetry = symmetry;
+  if (symmetry.mirrorId === e.id) {
+    selfMirrorCount++;
+  } else if (symmetry.mirrorPure) {
+    mirrorPureCount++;
+  } else {
+    mirrorDifferentCount++;
+  }
+}
+assert.equal(mirrorPureCount + mirrorDifferentCount + selfMirrorCount, 440);
+const symmetryStats = {
+  mirrorPure: mirrorPureCount,
+  mirrorDifferent: mirrorDifferentCount,
+  selfMirror: selfMirrorCount,
+};
 // Prefer the existing simple base family first, then larger families.
 const familyMap = new Map<string, Entry[]>();
 for (const e of chosen) {
@@ -147,13 +175,28 @@ const result = {
   pairCount: 220,
   familyCount: families.length,
   sourceCount: rows.size,
+  symmetryStats,
   families,
 };
 const out = new URL("src/features/uf-trainer/catalog.json", root);
 fs.writeFileSync(out, `${JSON.stringify(result, null, 2)}\n`);
+const symmetryLine = `Symmetry: ${symmetryStats.mirrorPure} cases are a pure LR mirror of their partner's assigned alg, ${symmetryStats.mirrorDifferent} differ, ${symmetryStats.selfMirror} are self-mirrored (both targets on the M plane).`;
+// CATALOG.md's family table is hand-curated, but its symmetry-stats line is
+// derived here so the two files can never drift apart.
+const catalogDoc = new URL("docs/uf-trainer/CATALOG.md", root);
+const docText = fs.readFileSync(catalogDoc, "utf8");
+const symmetryLinePattern = /^Symmetry: .*$/mu;
+const updatedDoc = symmetryLinePattern.test(docText)
+  ? docText.replace(symmetryLinePattern, symmetryLine)
+  : docText.replace(
+      /^(Family numbers match the app atlas\. Opposite directions share a family\.)$/mu,
+      `$1\n\n${symmetryLine}`,
+    );
+fs.writeFileSync(catalogDoc, updatedDoc);
 console.log(
   `Generated ${families.length} verified core families covering all 440 directed UF cycles / 220 inverse pairs from ${rows.size} source selections.`,
 );
+console.log(symmetryLine);
 console.log(
   families
     .slice(0, 10)

@@ -493,6 +493,100 @@
   font-weight: 600;
   color: #496345;
 }
+.symmetry {
+  margin-top: 23px;
+  padding-top: 17px;
+  border-top: 1px solid var(--line);
+}
+.symmetryChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 14px;
+}
+.symmetryChips button {
+  font-size: 10px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  padding: 6px 11px;
+  white-space: nowrap;
+}
+.symmetryChips button small {
+  display: block;
+  font-size: 9px;
+  opacity: 0.75;
+  letter-spacing: 0.02em;
+}
+.symmetryChips button:hover:not(:disabled) {
+  background: #edf2e9;
+}
+.symmetryChips button:disabled {
+  background: #254c3c;
+  border-color: #254c3c;
+  color: white;
+}
+.preferMirror {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+.preferMirror input {
+  accent-color: var(--green);
+}
+.variantList {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.variantList button {
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fafbf5;
+}
+.variantList button:hover {
+  border-color: #9cc0ab;
+}
+.variantList button[aria-checked="true"] {
+  background: #e7f0e7;
+  border-color: #77aa93;
+}
+.variantList code {
+  display: block;
+  font-size: 12px;
+  color: #344c40;
+}
+.variantList small {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.variantBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 6px;
+}
+.variantBadges em {
+  font-style: normal;
+  font-size: 9px;
+  letter-spacing: 0.03em;
+  padding: 2px 7px;
+  border-radius: 9px;
+}
+.pureBadge {
+  background: #e4ebdc;
+  color: #496345;
+}
+.differsBadge {
+  background: #f8e4d9;
+  color: #9c6229;
+}
 .story {
   display: grid;
   grid-template-columns: 1fr 1.6fr;
@@ -1410,6 +1504,13 @@
 }
 .appLayout .proof {
   margin-top: 12px;
+}
+.appLayout .symmetry {
+  margin-top: 12px;
+  padding-top: 12px;
+}
+.appLayout .variantList button {
+  padding: 8px 10px;
 }
 .appLayout .footer {
   display: none;

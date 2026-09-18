@@ -12,31 +12,23 @@ import {
   apply,
   turnSpec,
   simplifyMoves,
+  MOVE_TOKENS,
+  mirrorMove,
+  mirrorMoves,
+  mirrorCycle,
+  mirrorFacelet,
+  invertCycle,
+  computeSymmetry,
+  computeSymmetryGroup,
+  computeAlgVariants,
+  type CaseCore,
+  type SymmetryInfo,
 } from "../../src/features/uf-trainer/engine.ts";
 import { Vector3 } from "three";
 import tracer from "../../src/utils/tracer.ts";
 const home = solved();
 assert.equal(new Set(home).size, 54);
-const allMoves = [
-  "R",
-  "L",
-  "U",
-  "D",
-  "F",
-  "B",
-  "M",
-  "E",
-  "S",
-  "r",
-  "l",
-  "u",
-  "d",
-  "f",
-  "b",
-  "x",
-  "y",
-  "z",
-].flatMap((m) => [m, `${m}'`, `${m}2`]);
+const allMoves = MOVE_TOKENS;
 const faceOrder = ["U", "L", "F", "R", "B", "D"];
 for (const m of allMoves) {
   assert.deepEqual(execute([m, ...inverse([m])]), home);
@@ -47,6 +39,63 @@ for (const m of allMoves) {
   const actual = result.map((id) => initial[home.indexOf(id)]).join("");
   assert.equal(actual, tracer.sequenceToState(m).slice(1), m);
 }
+// Independent sanity table for mirrorMove, brute-forced at engine.ts module
+// init: M and x are LR-mirror fixed points, "invert then swap L/R" is wrong.
+const expectedMirrorMoves: Record<string, string> = {
+  R: "L'",
+  "R'": "L",
+  R2: "L2",
+  L: "R'",
+  "L'": "R",
+  L2: "R2",
+  U: "U'",
+  "U'": "U",
+  U2: "U2",
+  D: "D'",
+  "D'": "D",
+  D2: "D2",
+  F: "F'",
+  "F'": "F",
+  F2: "F2",
+  B: "B'",
+  "B'": "B",
+  B2: "B2",
+  M: "M",
+  "M'": "M'",
+  M2: "M2",
+  E: "E'",
+  "E'": "E",
+  E2: "E2",
+  S: "S'",
+  "S'": "S",
+  S2: "S2",
+  x: "x",
+  "x'": "x'",
+  x2: "x2",
+  y: "y'",
+  "y'": "y",
+  y2: "y2",
+  z: "z'",
+  "z'": "z",
+  z2: "z2",
+  r: "l'",
+  l: "r'",
+  u: "u'",
+  f: "f'",
+  b: "b'",
+  d: "d'",
+};
+for (const [token, mirrored] of Object.entries(expectedMirrorMoves)) {
+  assert.equal(mirrorMove(token), mirrored, `mirrorMove(${token})`);
+}
+assert.equal(new Set(allMoves.map(mirrorMove)).size, allMoves.length);
+assert.deepEqual(mirrorCycle(["UF", "LU", "RU"]), ["UF", "RU", "LU"]);
+assert.deepEqual(invertCycle(["UF", "LU", "RU"]), ["UF", "RU", "LU"]);
+assert.equal(mirrorFacelet("UF"), "UF");
+assert.equal(mirrorFacelet("LU"), "RU");
+console.log(
+  `Verified the LR-mirror sanity table for all ${Object.keys(expectedMirrorMoves).length} listed tokens, mirrorMove bijectivity over all ${allMoves.length} tokens, and mirrorCycle/invertCycle on a sample cycle.`,
+);
 assert.deepEqual(
   FACELETS.filter((_, i) => i % 9 === 4).map((f) => f.face),
   faceOrder,
@@ -162,6 +211,30 @@ for (const family of catalog.families) {
     assert.deepEqual(other.setup, entry.setup);
     assert.deepEqual(other.a, entry.b);
     assert.deepEqual(other.b, entry.a);
+    // LR-mirroring the algorithm must land exactly on the LR-mirrored cycle.
+    const mirroredMoves = mirrorMoves(moves),
+      mirroredCycle = mirrorCycle(entry.cycle),
+      mirroredFinal = execute(mirroredMoves);
+    for (let i = 0; i < 3; i++) {
+      assert.equal(
+        destination(mirroredFinal, mirroredCycle[i]),
+        mirroredCycle[(i + 1) % 3],
+        `${entry.id}: mirrored cycle`,
+      );
+    }
+    const mirroredChanged = FACELETS.filter(
+      (f, i) => f.id !== mirroredFinal[i],
+    );
+    assert.equal(
+      mirroredChanged.length,
+      6,
+      `${entry.id}: mirrored changed count`,
+    );
+    assert.deepEqual(
+      execute([...mirroredMoves, ...inverse(mirroredMoves)]),
+      home,
+      `${entry.id}: mirrored restoration`,
+    );
   }
 }
 const targets = FACELETS.filter(
@@ -178,6 +251,90 @@ assert.equal(ids.size, 440);
 assert.equal(catalog.familyCount, catalog.families.length);
 console.log(
   `Verified all ${ids.size} directed cases in ${catalog.familyCount} families, setup-to-core alignment and inverse pairing. No missing or duplicate UF cases.`,
+);
+
+// Symmetry: stored ids/purity must match recomputation, every group partner
+// must exist, and every algVariants row must independently solve the case.
+type CatalogEntry = CaseCore & { symmetry: SymmetryInfo };
+const byId = new Map<string, CatalogEntry>();
+for (const family of catalog.families) {
+  for (const entry of family.cases) {
+    byId.set(entry.id, entry);
+  }
+}
+assert.equal(byId.size, 440);
+const findCase = (id: string) => byId.get(id);
+let recomputedMirrorPure = 0,
+  recomputedMirrorDifferent = 0,
+  recomputedSelfMirror = 0;
+for (const entry of byId.values()) {
+  const recomputed = computeSymmetry(entry, findCase);
+  assert.deepEqual(
+    recomputed,
+    entry.symmetry,
+    `${entry.id}: symmetry mismatch`,
+  );
+  assert.equal(entry.symmetry.inversePure, true, `${entry.id}: inversePure`);
+  if (entry.symmetry.mirrorId === entry.id) {
+    recomputedSelfMirror++;
+  } else if (entry.symmetry.mirrorPure) {
+    recomputedMirrorPure++;
+  } else {
+    recomputedMirrorDifferent++;
+  }
+  const group = computeSymmetryGroup(entry);
+  for (const member of group) {
+    assert.ok(
+      byId.has(member.caseId),
+      `${entry.id}: missing partner ${member.caseId}`,
+    );
+  }
+  assert.ok(
+    group.some((member) => member.caseId === entry.id),
+    `${entry.id}: symmetry group missing self`,
+  );
+  const variants = computeAlgVariants(entry, findCase);
+  assert.ok(
+    variants.some((variant) => variant.pure),
+    `${entry.id}: no variant marked pure`,
+  );
+  for (const variant of variants) {
+    const variantMoves = [
+      ...variant.setup,
+      ...variant.a,
+      ...variant.b,
+      ...inverse(variant.a),
+      ...inverse(variant.b),
+      ...inverse(variant.setup),
+    ];
+    const variantFinal = execute(variantMoves);
+    for (let i = 0; i < 3; i++) {
+      assert.equal(
+        destination(variantFinal, entry.cycle[i]),
+        entry.cycle[(i + 1) % 3],
+        `${entry.id}: variant ${variant.key} cycle`,
+      );
+    }
+    const variantChanged = FACELETS.filter((f, i) => f.id !== variantFinal[i]);
+    assert.equal(
+      variantChanged.length,
+      6,
+      `${entry.id}: variant ${variant.key} changed count`,
+    );
+    assert.deepEqual(
+      execute([...variantMoves, ...inverse(variantMoves)]),
+      home,
+      `${entry.id}: variant ${variant.key} restoration`,
+    );
+  }
+}
+assert.deepEqual(catalog.symmetryStats, {
+  mirrorPure: recomputedMirrorPure,
+  mirrorDifferent: recomputedMirrorDifferent,
+  selfMirror: recomputedSelfMirror,
+});
+console.log(
+  `Symmetry: ${recomputedMirrorPure} cases are a pure LR mirror of their partner's assigned alg, ${recomputedMirrorDifferent} differ, ${recomputedSelfMirror} are self-mirrored (both targets on the M plane).`,
 );
 
 assert.deepEqual(simplifyMoves(["U2", "U'"]).moves, ["U"]);

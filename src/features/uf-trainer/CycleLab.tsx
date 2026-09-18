@@ -8,10 +8,24 @@ import {
   type CSSProperties,
 } from "react";
 import Link from "next/link";
-import { FACELETS, destination, execute, simplifyMoves } from "./engine";
-import { FAMILIES, CASES, caseLesson, setupChoices } from "./catalog";
+import {
+  FACELETS,
+  destination,
+  execute,
+  simplifyMoves,
+  defaultVariantKey,
+} from "./engine";
+import {
+  FAMILIES,
+  CASES,
+  caseLesson,
+  setupChoices,
+  symmetryGroup,
+  algVariants,
+} from "./catalog";
 import styles from "./lab.module.css";
 import dynamic from "next/dynamic";
+import SymmetryPanel from "./SymmetryPanel";
 const Cube3D = dynamic(() => import("./Cube3D"), {
   ssr: false,
   loading: () => <p>Loading 3D cube…</p>,
@@ -64,6 +78,36 @@ function subscribeProgress(callback: () => void) {
   window.addEventListener("storage", callback);
   return () => {
     window.removeEventListener("uf-progress", callback);
+    window.removeEventListener("storage", callback);
+  };
+}
+const PREFER_MIRROR_STORAGE = "uf-cycle-lab-prefer-mirror-v1";
+let memoryPreferMirror = "false";
+let preferMirrorStorageUnavailable = false;
+function writePreferMirror(value: boolean) {
+  memoryPreferMirror = JSON.stringify(value);
+  try {
+    localStorage.setItem(PREFER_MIRROR_STORAGE, memoryPreferMirror);
+  } catch {
+    preferMirrorStorageUnavailable = true;
+  }
+  window.dispatchEvent(new Event("uf-prefer-mirror"));
+}
+function preferMirrorSnapshot() {
+  if (preferMirrorStorageUnavailable) {
+    return memoryPreferMirror;
+  }
+  try {
+    return localStorage.getItem(PREFER_MIRROR_STORAGE) || memoryPreferMirror;
+  } catch {
+    return memoryPreferMirror;
+  }
+}
+function subscribePreferMirror(callback: () => void) {
+  window.addEventListener("uf-prefer-mirror", callback);
+  window.addEventListener("storage", callback);
+  return () => {
+    window.removeEventListener("uf-prefer-mirror", callback);
     window.removeEventListener("storage", callback);
   };
 }
@@ -234,13 +278,32 @@ export default function CycleLab() {
   const progress = readProgress(
     useSyncExternalStore(subscribeProgress, progressSnapshot, () => "{}"),
   );
+  const preferMirror =
+    useSyncExternalStore(
+      subscribePreferMirror,
+      preferMirrorSnapshot,
+      () => "false",
+    ) === "true";
+  const [variantKey, setVariantKey] = useState<string | null>(null);
   const [storageMessage, setStorageMessage] = useState("");
   const [question, setQuestion] = useState(1),
     [answer, setAnswer] = useState<number | null>(null),
     [hint, setHint] = useState(false);
   const family = FAMILIES[familyIndex];
-  const current = caseLesson(family.cases[selected]);
-  const reverse = current.a.join(" ") !== family.id.split(" | ")[0];
+  const currentEntry = { ...family.cases[selected], familyIndex };
+  const symmetryVariants = algVariants(currentEntry);
+  const symmetryGroupInfo = symmetryGroup(currentEntry);
+  const activeVariantKey =
+    variantKey && symmetryVariants.some((v) => v.key === variantKey)
+      ? variantKey
+      : defaultVariantKey(symmetryVariants, preferMirror);
+  const activeVariant =
+    symmetryVariants.find((v) => v.key === activeVariantKey) ||
+    symmetryVariants[0];
+  const current = caseLesson(activeVariant);
+  // Family-relative direction is a property of the case itself, not of
+  // whichever symmetry-derived algorithm variant is currently displayed.
+  const reverse = currentEntry.a.join(" ") !== family.id.split(" | ")[0];
   const foldAutomatically = autoFold && (narrow || playing);
   const leftOpen = !focusCube && (leftOverride ?? !foldAutomatically);
   const rightOpen = !focusCube && (rightOverride ?? !foldAutomatically);
@@ -310,6 +373,7 @@ export default function CycleLab() {
   }, [playing, total, step]);
   const changeCase = (i: number) => {
     setSelected(i);
+    setVariantKey(null);
     setStep(0);
     setPlaying(false);
   };
@@ -318,6 +382,7 @@ export default function CycleLab() {
     setHint(false);
     setFamilyIndex(i);
     setSelected(0);
+    setVariantKey(null);
     setStep(0);
     setPlaying(false);
   };
@@ -330,6 +395,7 @@ export default function CycleLab() {
       setSelected(
         FAMILIES[entry.familyIndex].cases.findIndex((c) => c.id === id),
       );
+      setVariantKey(null);
       setStep(0);
       setPlaying(false);
     }
@@ -346,8 +412,13 @@ export default function CycleLab() {
       ? CASES
       : CASES.filter((c) => c.familyIndex === familyIndex);
   const quizEntry = practiceCases[(question * 137) % practiceCases.length];
-  const quiz = caseLesson(quizEntry);
-  const choices = setupChoices(quizEntry);
+  const quizVariants = algVariants(quizEntry);
+  const quizVariant =
+    quizVariants.find(
+      (v) => v.key === defaultVariantKey(quizVariants, preferMirror),
+    ) || quizVariants[0];
+  const quiz = caseLesson(quizVariant);
+  const choices = setupChoices(quizVariant);
   const quizIndex = choices.indexOf(quiz.setup.join(" "));
   const attempts = Object.values(progress).reduce(
       (sum, p) => sum + p.attempts,
@@ -866,6 +937,17 @@ export default function CycleLab() {
                     remain moved.
                   </p>
                 </div>
+                <SymmetryPanel
+                  entry={currentEntry}
+                  group={symmetryGroupInfo}
+                  variants={symmetryVariants}
+                  activeKey={activeVariantKey}
+                  onSelectVariant={setVariantKey}
+                  onNavigate={openCase}
+                  preferMirror={preferMirror}
+                  onChangePreferMirror={writePreferMirror}
+                  pretty={pretty}
+                />
               </aside>
             </div>
           </>
