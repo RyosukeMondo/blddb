@@ -80,7 +80,7 @@ export function symmetryGroup(entry: CatalogCase): SymmetryGroupMember[] {
 }
 
 export type AlgVariant = CatalogCase & {
-  key: VariantRelation;
+  key: string;
   provenance: { relation: VariantRelation; fromCaseId: string }[];
   pure: boolean;
 };

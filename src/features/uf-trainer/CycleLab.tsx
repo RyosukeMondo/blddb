@@ -13,7 +13,7 @@ import {
   destination,
   execute,
   simplifyMoves,
-  defaultVariantKey,
+  resolveVariantKey,
 } from "./engine";
 import {
   FAMILIES,
@@ -49,6 +49,7 @@ const faceColors: Record<string, string> = {
   R: "#e1b8af",
 };
 const pretty = (s: string) => s.replaceAll("'", "′");
+const casesById = new Map(CASES.map((c) => [c.id, c]));
 const STORAGE = "uf-cycle-lab-progress-v1";
 type Progress = Record<string, { attempts: number; correct: number }>;
 let memoryProgress = "{}";
@@ -110,6 +111,55 @@ function subscribePreferMirror(callback: () => void) {
     window.removeEventListener("uf-prefer-mirror", callback);
     window.removeEventListener("storage", callback);
   };
+}
+// Per-case "my alg" choice: { [caseId]: variantKey }. Same external-store +
+// in-memory-fallback pattern as prefer-mirror above, so a saved choice
+// survives reloads but degrades gracefully when storage is unavailable.
+const VARIANT_CHOICES_STORAGE = "uf-cycle-lab-variant-choices-v1";
+type VariantChoices = Record<string, string>;
+let memoryVariantChoices = "{}";
+let variantChoicesStorageUnavailable = false;
+function writeVariantChoices(value: VariantChoices) {
+  memoryVariantChoices = JSON.stringify(value);
+  try {
+    localStorage.setItem(VARIANT_CHOICES_STORAGE, memoryVariantChoices);
+  } catch {
+    variantChoicesStorageUnavailable = true;
+  }
+  window.dispatchEvent(new Event("uf-variant-choices"));
+}
+function variantChoicesSnapshot() {
+  if (variantChoicesStorageUnavailable) {
+    return memoryVariantChoices;
+  }
+  try {
+    return (
+      localStorage.getItem(VARIANT_CHOICES_STORAGE) || memoryVariantChoices
+    );
+  } catch {
+    return memoryVariantChoices;
+  }
+}
+function subscribeVariantChoices(callback: () => void) {
+  window.addEventListener("uf-variant-choices", callback);
+  window.addEventListener("storage", callback);
+  return () => {
+    window.removeEventListener("uf-variant-choices", callback);
+    window.removeEventListener("storage", callback);
+  };
+}
+function readVariantChoices(raw: string): VariantChoices {
+  try {
+    const data: unknown = JSON.parse(raw);
+    if (!data || typeof data !== "object" || Array.isArray(data)) {
+      return {};
+    }
+    return Object.fromEntries(
+      Object.entries(data).filter(([, v]) => typeof v === "string"),
+    );
+  } catch {
+    return {};
+  }
 }
 function readProgress(raw: string): Progress {
   try {
@@ -284,7 +334,21 @@ export default function CycleLab() {
       preferMirrorSnapshot,
       () => "false",
     ) === "true";
-  const [variantKey, setVariantKey] = useState<string | null>(null);
+  const variantChoices = readVariantChoices(
+    useSyncExternalStore(
+      subscribeVariantChoices,
+      variantChoicesSnapshot,
+      () => "{}",
+    ),
+  );
+  const setVariantChoice = (caseId: string, key: string) => {
+    writeVariantChoices({ ...variantChoices, [caseId]: key });
+  };
+  const clearVariantChoice = (caseId: string) => {
+    const next = { ...variantChoices };
+    Reflect.deleteProperty(next, caseId);
+    writeVariantChoices(next);
+  };
   const [storageMessage, setStorageMessage] = useState("");
   const [question, setQuestion] = useState(1),
     [answer, setAnswer] = useState<number | null>(null),
@@ -293,10 +357,12 @@ export default function CycleLab() {
   const currentEntry = { ...family.cases[selected], familyIndex };
   const symmetryVariants = algVariants(currentEntry);
   const symmetryGroupInfo = symmetryGroup(currentEntry);
-  const activeVariantKey =
-    variantKey && symmetryVariants.some((v) => v.key === variantKey)
-      ? variantKey
-      : defaultVariantKey(symmetryVariants, preferMirror);
+  const savedVariantKey = variantChoices[currentEntry.id];
+  const activeVariantKey = resolveVariantKey(
+    symmetryVariants,
+    savedVariantKey,
+    preferMirror,
+  );
   const activeVariant =
     symmetryVariants.find((v) => v.key === activeVariantKey) ||
     symmetryVariants[0];
@@ -373,7 +439,6 @@ export default function CycleLab() {
   }, [playing, total, step]);
   const changeCase = (i: number) => {
     setSelected(i);
-    setVariantKey(null);
     setStep(0);
     setPlaying(false);
   };
@@ -382,7 +447,6 @@ export default function CycleLab() {
     setHint(false);
     setFamilyIndex(i);
     setSelected(0);
-    setVariantKey(null);
     setStep(0);
     setPlaying(false);
   };
@@ -395,7 +459,6 @@ export default function CycleLab() {
       setSelected(
         FAMILIES[entry.familyIndex].cases.findIndex((c) => c.id === id),
       );
-      setVariantKey(null);
       setStep(0);
       setPlaying(false);
     }
@@ -415,7 +478,13 @@ export default function CycleLab() {
   const quizVariants = algVariants(quizEntry);
   const quizVariant =
     quizVariants.find(
-      (v) => v.key === defaultVariantKey(quizVariants, preferMirror),
+      (v) =>
+        v.key ===
+        resolveVariantKey(
+          quizVariants,
+          variantChoices[quizEntry.id],
+          preferMirror,
+        ),
     ) || quizVariants[0];
   const quiz = caseLesson(quizVariant);
   const choices = setupChoices(quizVariant);
@@ -425,6 +494,29 @@ export default function CycleLab() {
       0,
     ),
     correct = Object.values(progress).reduce((sum, p) => sum + p.correct, 0);
+  // A remembered choice "flips" a case when it resolves to a variant that
+  // differs from the catalog's assigned alg (in practice: a mirror-derived
+  // one, since the inverse variant is always identical to assigned).
+  const flippedCase = (caseId: string, key: string) => {
+    const caseEntry = casesById.get(caseId);
+    if (!caseEntry) {
+      return false;
+    }
+    const variant = algVariants(caseEntry).find((v) => v.key === key);
+    return Boolean(variant && !variant.pure);
+  };
+  const rememberedSummary = Object.entries(variantChoices).reduce(
+    (acc, [caseId, key]) => {
+      if (!casesById.has(caseId)) {
+        return acc;
+      }
+      return {
+        total: acc.total + 1,
+        mirror: acc.mirror + (flippedCase(caseId, key) ? 1 : 0),
+      };
+    },
+    { total: 0, mirror: 0 },
+  );
   const submit = (i: number) => {
     if (answer !== null) {
       return;
@@ -706,6 +798,15 @@ export default function CycleLab() {
                         </strong>
                         <small>{l.cycle.join(" → ")}</small>
                       </span>
+                      {variantChoices[l.id] &&
+                        flippedCase(l.id, variantChoices[l.id]) && (
+                          <span
+                            className={styles.mirrorMarker}
+                            title="Remembered alg is a mirror variant, not the assigned one"
+                          >
+                            M
+                          </span>
+                        )}
                       <span className={styles.familyGlyph}>
                         {i === 0 ? "◎" : "↳"}
                       </span>
@@ -942,10 +1043,17 @@ export default function CycleLab() {
                   group={symmetryGroupInfo}
                   variants={symmetryVariants}
                   activeKey={activeVariantKey}
-                  onSelectVariant={setVariantKey}
+                  savedKey={savedVariantKey}
+                  onSelectVariant={(key) =>
+                    setVariantChoice(currentEntry.id, key)
+                  }
+                  onClearVariantChoice={() =>
+                    clearVariantChoice(currentEntry.id)
+                  }
                   onNavigate={openCase}
                   preferMirror={preferMirror}
                   onChangePreferMirror={writePreferMirror}
+                  rememberedSummary={rememberedSummary}
                   pretty={pretty}
                 />
               </aside>

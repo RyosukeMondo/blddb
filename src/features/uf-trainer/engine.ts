@@ -432,7 +432,11 @@ export type VariantProvenance = {
   fromCaseId: string;
 };
 export type AlgVariantCore = {
-  key: VariantRelation;
+  // Content-based: the simplified full move sequence this variant plays,
+  // joined by spaces. Stable across catalog regeneration, unlike a list
+  // index or a relation label (several cases can share a relation label
+  // while playing different sequences).
+  key: string;
   setup: string[];
   a: string[];
   b: string[];
@@ -533,7 +537,7 @@ export function computeAlgVariants(
       throw new Error("Unreachable: missing alg-variant group");
     }
     return {
-      key: group.provenance[0].relation,
+      key: seqKey,
       setup: group.setup,
       a: group.a,
       b: group.b,
@@ -544,11 +548,12 @@ export function computeAlgVariants(
 }
 
 // Shared default-variant policy, used by both the explore player and the
-// practice quiz so they agree on which algorithm is "current" for a case.
+// practice quiz so they agree on which algorithm is "current" for a case
+// absent a remembered per-case choice.
 export function defaultVariantKey(
   variants: AlgVariantCore[],
   preferMirror: boolean,
-): VariantRelation {
+): string {
   const assigned = variants.find((v) =>
     v.provenance.some((p) => p.relation === "assigned"),
   );
@@ -562,4 +567,20 @@ export function defaultVariantKey(
     }
   }
   return assigned ? assigned.key : variants[0].key;
+}
+
+// The single resolution order for "which algorithm is current for this
+// case," shared by the explore player and the practice quiz: a remembered
+// per-case choice (if it still names one of this case's variants) beats the
+// global "prefer LR mirror" preference, which beats the catalog's assigned
+// alg. Callers should not re-implement this order themselves.
+export function resolveVariantKey(
+  variants: AlgVariantCore[],
+  savedKey: string | undefined,
+  preferMirror: boolean,
+): string {
+  if (savedKey && variants.some((v) => v.key === savedKey)) {
+    return savedKey;
+  }
+  return defaultVariantKey(variants, preferMirror);
 }

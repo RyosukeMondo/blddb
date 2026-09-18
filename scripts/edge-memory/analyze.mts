@@ -1,6 +1,10 @@
 import codeConverter from "../../src/utils/codeConverter.ts";
 import fs from "fs";
 
+const NESTED_OPEN = /\[.+\[/u;
+const SECOND_COMM = /\],.*\]/u;
+const OPEN_BRACKET = /\[/u;
+
 const ROOT = new URL("../../", import.meta.url).pathname;
 const OUT = `${ROOT}docs/edge-memory`;
 fs.mkdirSync(OUT, { recursive: true });
@@ -25,7 +29,7 @@ const buffers = [...new Set(keys.map((k) => k[0]))].sort();
 // normalize compound (sum-of-commutators) picks into one bucket so grouping/tables stay clean
 for (const k of keys) {
   const c = picks[k].core;
-  if (c.includes("+") || /\[.+\[/u.test(c) || /\],.*\]/u.test(c.slice(1))) {
+  if (c.includes("+") || NESTED_OPEN.test(c) || SECOND_COMM.test(c.slice(1))) {
     picks[k].core = "⊕compound";
   }
 }
@@ -37,7 +41,7 @@ const invOf = (k: string) => k[0] + k[2] + k[1];
 function splitCore(core: string) {
   const inner = core.slice(1, -1);
   // compound: engine emitted a sum of two commutators ( [..]+[..] ) — not a single clean comm
-  if (core.includes("+") || /\[/u.test(inner)) {
+  if (core.includes("+") || OPEN_BRACKET.test(inner)) {
     return { ic: "⊕", ins: "compound", compound: true };
   }
   let depth = 0,

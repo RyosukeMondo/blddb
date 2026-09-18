@@ -1,5 +1,8 @@
 import commutator from "../../src/utils/commutator.ts";
 import fs from "fs";
+
+const COMM_SHAPE = /\[.*,.*\]/u;
+const NESTED_OPEN = /\[.+\[/u;
 const ROOT = new URL("../../", import.meta.url).pathname;
 const nm = JSON.parse(
   fs.readFileSync(`${ROOT}/public/data/edgeNightmare.json`, "utf8"),
@@ -58,7 +61,7 @@ function pickBest(key: string) {
       }
       return { alg, comm, mlen: moveCount(alg) };
     })
-    .filter((r) => /\[.*,.*\]/u.test(r.comm));
+    .filter((r) => COMM_SHAPE.test(r.comm));
   if (!rows.length) {
     return null;
   }
@@ -67,7 +70,7 @@ function pickBest(key: string) {
     const setupMoves = setup ? moveCount(setup) : 0;
     const pure = setupMoves === 0;
     // compound = sum-of-commutators or nested comm — far less memorable than a single clean comm
-    const compound = r.comm.includes("+") || /\[.+\[/u.test(r.comm);
+    const compound = r.comm.includes("+") || NESTED_OPEN.test(r.comm);
     const core = `[${[A, B].sort().join(",")}]`;
     // a single comm is worth up to +3 moves vs a compound
     const score = r.mlen + (compound ? 3 : 0);

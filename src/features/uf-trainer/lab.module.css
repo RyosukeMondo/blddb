@@ -235,6 +235,19 @@
   color: var(--green);
   font-size: 20px;
 }
+.mirrorMarker {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 700;
+  color: #9c6229;
+  background: #f8e4d9;
+  border-radius: 8px;
+  width: 15px;
+  height: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
 .note {
   padding-top: 17px;
   border-top: 1px solid var(--line);
@@ -536,6 +549,38 @@
 .preferMirror input {
   accent-color: var(--green);
 }
+.rememberedSummary {
+  font-size: 10px;
+  color: var(--muted);
+  margin: -4px 0 14px;
+  line-height: 1.6;
+}
+.variantListHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 8px;
+  margin-bottom: 7px;
+}
+.variantListHeader > span {
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.clearChoice {
+  font-size: 9px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  padding: 4px 9px;
+  white-space: nowrap;
+  color: var(--muted);
+}
+.clearChoice:hover {
+  background: #edf2e9;
+  color: #344c40;
+}
 .variantList {
   display: flex;
   flex-direction: column;
@@ -586,6 +631,10 @@
 .differsBadge {
   background: #f8e4d9;
   color: #9c6229;
+}
+.myAlgBadge {
+  background: #254c3c;
+  color: white;
 }
 .story {
   display: grid;

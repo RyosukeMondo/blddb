@@ -11,12 +11,14 @@ import {
 } from "../../src/features/uf-trainer/engine.ts";
 import commutator from "../../src/utils/commutator.ts";
 import tracer from "../../src/utils/tracer.ts";
+
+const SHEET_NAME = /^edge_buffer_.*\.md$/u;
 const root = new URL("../../", import.meta.url);
 const sheets = new URL("docs/edge-memory/", root);
 const rows = new Map<string, { notation: string; source: string }>();
 for (const name of fs
   .readdirSync(sheets)
-  .filter((n) => /^edge_buffer_.*\.md$/u.test(n))
+  .filter((n) => SHEET_NAME.test(n))
   .sort()) {
   const text = fs.readFileSync(new URL(name, sheets), "utf8");
   for (const m of text.matchAll(/\| \*\*([A-Z]{3})\*\* \| `([^`]+)`/gu)) {
