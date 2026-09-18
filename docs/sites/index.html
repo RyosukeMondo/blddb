@@ -1,0 +1,745 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BLDDB — Rubik's Cube Blindfolded アルゴリズムデータベース</title>
+    <meta
+      name="description"
+      content="BLDDB は 3x3 ルービックキューブのブラインドフォールド（目隠し）競技向けアルゴリズムデータベース。3-style、BigBLD、コミュテーター生成、チェッカーなどを収録。"
+    />
+    <style>
+      :root {
+        --accent: #5b5bd6;
+        --accent-strong: #4544b0;
+        --accent-soft: #eceafd;
+        --bg: #fafafa;
+        --bg-elevated: #ffffff;
+        --text: #1c1c22;
+        --text-muted: #57596b;
+        --border: #e4e4ec;
+        --code-bg: #f2f1fb;
+        --shadow:
+          0 1px 2px rgba(20, 20, 40, 0.04), 0 8px 24px rgba(20, 20, 40, 0.06);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --accent: #9b9bf5;
+          --accent-strong: #b7b7ff;
+          --accent-soft: #26264a;
+          --bg: #111116;
+          --bg-elevated: #1a1a22;
+          --text: #eceaf6;
+          --text-muted: #a3a3b8;
+          --border: #2c2c3a;
+          --code-bg: #201f30;
+          --shadow:
+            0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans",
+          "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", Meiryo,
+          Roboto, Helvetica, Arial, sans-serif;
+        line-height: 1.7;
+        -webkit-font-smoothing: antialiased;
+        overflow-x: hidden;
+      }
+      a {
+        color: var(--accent-strong);
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      .wrap {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+      section {
+        padding: 64px 0;
+      }
+      section + section {
+        border-top: 1px solid var(--border);
+      }
+      h1,
+      h2,
+      h3 {
+        line-height: 1.35;
+        letter-spacing: -0.01em;
+      }
+      h2 {
+        font-size: clamp(1.4rem, 2.4vw, 1.8rem);
+        margin: 0 0 8px;
+      }
+      .section-kicker {
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: var(--accent-strong);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        margin: 0 0 10px;
+      }
+      .section-lead {
+        color: var(--text-muted);
+        margin: 0 0 32px;
+        max-width: 640px;
+      }
+
+      /* HERO */
+      .hero {
+        padding: 96px 0 72px;
+        background:
+          radial-gradient(
+            1100px 480px at 15% -10%,
+            var(--accent-soft),
+            transparent 60%
+          ),
+          var(--bg);
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        padding: 6px 14px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent-strong);
+        border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+        margin-bottom: 22px;
+      }
+      .badge .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--accent);
+      }
+      .hero h1 {
+        font-size: clamp(2.1rem, 5vw, 3.2rem);
+        margin: 0 0 14px;
+      }
+      .hero h1 .logo-cube {
+        display: inline-block;
+        vertical-align: -6px;
+        margin-right: 10px;
+      }
+      .hero .tagline {
+        font-size: clamp(1.05rem, 2vw, 1.25rem);
+        color: var(--text-muted);
+        max-width: 640px;
+        margin: 0 0 28px;
+      }
+      .hero .meta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px 18px;
+        font-size: 0.9rem;
+        color: var(--text-muted);
+      }
+      .hero .meta-row span strong {
+        color: var(--text);
+        font-weight: 600;
+      }
+
+      /* FEATURE GRID */
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 18px;
+      }
+      .card {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 22px;
+        box-shadow: var(--shadow);
+      }
+      .card h3 {
+        font-size: 1.02rem;
+        margin: 0 0 8px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .card h3 .ico {
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        background: var(--accent-soft);
+        color: var(--accent-strong);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        font-size: 0.95rem;
+      }
+      .card p {
+        margin: 0;
+        color: var(--text-muted);
+        font-size: 0.93rem;
+      }
+
+      /* TECH STACK */
+      .pill-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+      .pill {
+        font-size: 0.85rem;
+        padding: 7px 14px;
+        border-radius: 8px;
+        background: var(--code-bg);
+        border: 1px solid var(--border);
+        color: var(--text);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      .stack-groups {
+        display: grid;
+        gap: 24px;
+        margin-top: 4px;
+      }
+      .stack-group h3 {
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-muted);
+        margin: 0 0 10px;
+        font-weight: 700;
+      }
+
+      /* ARCHITECTURE DIAGRAM */
+      .diagram {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 28px;
+        box-shadow: var(--shadow);
+        overflow-x: auto;
+      }
+      .diagram-row {
+        display: flex;
+        align-items: stretch;
+        gap: 14px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      .diagram-row + .diagram-row {
+        margin-top: 14px;
+      }
+      .dbox {
+        flex: 1 1 200px;
+        min-width: 170px;
+        border: 1.5px solid var(--border);
+        border-radius: 12px;
+        padding: 14px 16px;
+        background: var(--bg);
+        text-align: center;
+      }
+      .dbox.accent {
+        border-color: var(--accent);
+        background: var(--accent-soft);
+      }
+      .dbox .t {
+        font-weight: 700;
+        font-size: 0.92rem;
+        margin-bottom: 4px;
+      }
+      .dbox .s {
+        font-size: 0.78rem;
+        color: var(--text-muted);
+      }
+      .arrow-down {
+        display: flex;
+        justify-content: center;
+        color: var(--accent-strong);
+        font-size: 1.3rem;
+        margin: 2px 0;
+      }
+      .diagram-note {
+        margin-top: 18px;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+      }
+
+      /* TIMELINE */
+      .timeline {
+        border-left: 2px solid var(--border);
+        margin-left: 6px;
+        padding-left: 24px;
+        display: grid;
+        gap: 22px;
+      }
+      .tl-item {
+        position: relative;
+      }
+      .tl-item::before {
+        content: "";
+        position: absolute;
+        left: -30px;
+        top: 5px;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--accent);
+        border: 2px solid var(--bg);
+        box-shadow: 0 0 0 2px var(--accent);
+      }
+      .tl-date {
+        font-size: 0.78rem;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        color: var(--accent-strong);
+        font-weight: 700;
+        display: block;
+        margin-bottom: 2px;
+      }
+      .tl-msg {
+        font-size: 0.95rem;
+      }
+      .tl-msg code {
+        font-size: 0.82rem;
+        background: var(--code-bg);
+        padding: 1px 6px;
+        border-radius: 5px;
+      }
+
+      footer {
+        padding: 40px 0 60px;
+        text-align: center;
+        color: var(--text-muted);
+        font-size: 0.85rem;
+      }
+      footer a {
+        color: var(--text-muted);
+        text-decoration: underline;
+      }
+
+      @media (max-width: 640px) {
+        section {
+          padding: 44px 0;
+        }
+        .hero {
+          padding: 64px 0 44px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="hero">
+      <div class="wrap">
+        <div class="badge">
+          <span class="dot"></span>開発中（直近更新 2026-06-18）
+        </div>
+        <h1>
+          <svg
+            class="logo-cube"
+            width="44"
+            height="44"
+            viewBox="0 0 40 40"
+            aria-hidden="true"
+          >
+            <rect
+              x="1"
+              y="1"
+              width="17"
+              height="17"
+              rx="3"
+              fill="var(--accent)"
+              opacity="0.55"
+            />
+            <rect
+              x="22"
+              y="1"
+              width="17"
+              height="17"
+              rx="3"
+              fill="var(--accent)"
+              opacity="0.85"
+            />
+            <rect
+              x="1"
+              y="22"
+              width="17"
+              height="17"
+              rx="3"
+              fill="var(--accent)"
+              opacity="0.85"
+            />
+            <rect
+              x="22"
+              y="22"
+              width="17"
+              height="17"
+              rx="3"
+              fill="var(--accent)"
+            /></svg
+          >BLDDB
+        </h1>
+        <p class="tagline">
+          ルービックキューブ・ブラインドフォールド（目隠し）競技者のための、3-style
+          / BigBLD アルゴリズムデータベース。
+        </p>
+        <div class="meta-row">
+          <span>対応言語: <strong>日本語・英語・簡体中文</strong></span>
+          <span>ライセンス: <strong>GPL-3.0</strong></span>
+          <span
+            >本番サイト: <strong>blddb.net</strong>（本リポジトリは Next.js 版
+            v2）</span
+          >
+        </div>
+      </div>
+    </header>
+
+    <section id="overview">
+      <div class="wrap">
+        <p class="section-kicker">プロジェクト概要</p>
+        <h2>何をするプロジェクトか</h2>
+        <p class="section-lead">
+          BLDDB は、3x3
+          ルービックキューブの「ブラインドフォールド（目隠し）」競技で使うアルゴリズムを網羅的に検索・閲覧できるウェブデータベースです。
+          3-style
+          のコーナー／エッジ（全バッファ対応）、コーナーツイスト、エッジフリップ、パリティ、LTCT
+          & T2C、BigBLD（Wing / X-center / +-center / Midge）など、
+          競技者が暗記に使う手順を、レターリングスキームや自分の好みに応じて選べるように整理しています。
+        </p>
+        <p class="section-lead">
+          README によれば、本体サイト（blddb.net）は HTML5/CSS3
+          で書かれた安定版（v1）で、このリポジトリは 2024年3月から進行中の
+          完全リライト版（v2、Next.js + Tailwind CSS）です。v2 は v2.blddb.net
+          で先行公開されており、完成後に本体を置き換える計画です。
+          1人のメンテナ（Zixing Wang）によって継続的に開発されています。
+        </p>
+      </div>
+    </section>
+
+    <section id="features">
+      <div class="wrap">
+        <p class="section-kicker">主要機能</p>
+        <h2>できること</h2>
+        <p class="section-lead">
+          アプリ内のメニュー構成と v2 の「What's
+          New」から抽出した、実際に実装されている機能です。
+        </p>
+        <div class="grid">
+          <div class="card">
+            <h3>
+              <span class="ico">3</span>3-style データベース（全バッファ）
+            </h3>
+            <p>
+              コーナー・エッジそれぞれ全バッファに対応した 3-style
+              アルゴリズム一覧。ケースごとに複数の候補手順から好みのものを選択可能。
+            </p>
+          </div>
+          <div class="card">
+            <h3>
+              <span class="ico">🧊</span>コーナーツイスト / エッジフリップ /
+              パリティ
+            </h3>
+            <p>
+              3BLD
+              で必要な捻れ・向き違い・パリティのケースも個別ページで網羅。LTCT &
+              T2C（大キューブ向け手法）にも対応。
+            </p>
+          </div>
+          <div class="card">
+            <h3><span class="ico">📦</span>BigBLD（大キューブ目隠し）</h3>
+            <p>
+              Wing / X-center / +-center（tcenter） / Midge
+              の各パーツ種別ごとにアルゴリズムを提供。
+            </p>
+          </div>
+          <div class="card">
+            <h3>
+              <span class="ico">🔗</span>ダイレクトリンク & ワイルドカード検索
+            </h3>
+            <p>
+              例:
+              <code>/corner?position=UFR-UFL-UBL&amp;mode=manmade</code>
+              のように特定ケースへ直接リンク可能。<code>*</code>
+              によるワイルドカード指定で複数ケースを一括表示。
+            </p>
+          </div>
+          <div class="card">
+            <h3><span class="ico">✅</span>Algorithm Checker / Commutator</h3>
+            <p>
+              入力した手順が正しいかを検証する Checker
+              と、コミュテーターを生成するツールを搭載。
+            </p>
+          </div>
+          <div class="card">
+            <h3>
+              <span class="ico">📄</span>Algorithm Sheets & Nightmare モード
+            </h3>
+            <p>
+              暗記用シート（記憶に残りやすい構成の edge 3-style
+              シートなど）を出力できるほか、レアケース／ランダムケースを練習する
+              Nightmare モードを用意。
+            </p>
+          </div>
+          <div class="card">
+            <h3><span class="ico">🌓</span>ダークモード & 多言語対応</h3>
+            <p>
+              next-themes によるライト/ダーク切替、i18next
+              による日本語・英語・簡体中文対応、ブラウザ言語の自動検出。
+            </p>
+          </div>
+          <div class="card">
+            <h3><span class="ico">📱</span>レスポンシブ & PWA</h3>
+            <p>
+              スマートフォン・PC・タブレットに対応したレイアウト。serwist
+              によるサービスワーカーでオフライン利用を補助。
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="stack">
+      <div class="wrap">
+        <p class="section-kicker">技術スタック</p>
+        <h2>使用している技術</h2>
+        <p class="section-lead">
+          package.json（v2.0.0）および scripts/
+          配下の内容から確認できる実際の依存関係です。
+        </p>
+        <div class="stack-groups">
+          <div class="stack-group">
+            <h3>フロントエンド</h3>
+            <div class="pill-row">
+              <span class="pill">Next.js 16</span>
+              <span class="pill">React 19</span>
+              <span class="pill">TypeScript</span>
+              <span class="pill">Tailwind CSS 4</span>
+              <span class="pill">next-themes</span>
+              <span class="pill">react-select</span>
+              <span class="pill">react-joyride（ツアーガイド）</span>
+            </div>
+          </div>
+          <div class="stack-group">
+            <h3>国際化・PWA・データ</h3>
+            <div class="pill-row">
+              <span class="pill">i18next / react-i18next</span>
+              <span class="pill">i18next-browser-languagedetector</span>
+              <span class="pill">serwist（Service Worker）</span>
+              <span class="pill">xlsx</span>
+            </div>
+          </div>
+          <div class="stack-group">
+            <h3>開発ツール</h3>
+            <div class="pill-row">
+              <span class="pill">ESLint</span>
+              <span class="pill">Prettier</span>
+              <span class="pill">Husky（pre-commit）</span>
+            </div>
+          </div>
+          <div class="stack-group">
+            <h3>データ生成（scripts/, Python）</h3>
+            <div class="pill-row">
+              <span class="pill">codeConverter.py</span>
+              <span class="pill">bigbldCodeConverter.py</span>
+              <span class="pill">tracer.py / tracer_555.py</span>
+              <span class="pill">youtube.py（scrapetube）</span>
+              <span class="pill">result.py / result_post.py</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="architecture">
+      <div class="wrap">
+        <p class="section-kicker">構成 / アーキテクチャ</p>
+        <h2>大まかな構造</h2>
+        <p class="section-lead">
+          Next.js App Router を用いたページ構成に、静的データ（JSON/TS）と
+          Python 製の生成スクリプトを組み合わせた構成です。
+        </p>
+        <div class="diagram">
+          <div class="diagram-row">
+            <div class="dbox accent">
+              <div class="t">src/app/*</div>
+              <div class="s">
+                /corner /edge /twists /flips /parity /ltct<br />/bigbld/*
+                /nightmare/* /checker /commutator /sheets /settings
+              </div>
+            </div>
+          </div>
+          <div class="arrow-down">↓</div>
+          <div class="diagram-row">
+            <div class="dbox">
+              <div class="t">src/components/*</div>
+              <div class="s">
+                Table, ArrayTable, BLD, Checker, Commutator, Custom, Sheets,
+                Header, Hero, Footer など
+              </div>
+            </div>
+            <div class="dbox">
+              <div class="t">src/i18n/*</div>
+              <div class="s">i18next client/server 設定・言語検出</div>
+            </div>
+          </div>
+          <div class="arrow-down">↓</div>
+          <div class="diagram-row">
+            <div class="dbox">
+              <div class="t">public/data/*.json, *.ts</div>
+              <div class="s">
+                manmade / nightmare
+                各ケースのアルゴリズムデータ、動画URLマッピング
+              </div>
+            </div>
+            <div class="dbox">
+              <div class="t">public/locales/*.json</div>
+              <div class="s">en / ja / zh-CN の翻訳リソース</div>
+            </div>
+          </div>
+          <div class="arrow-down">↑ 生成</div>
+          <div class="diagram-row">
+            <div class="dbox">
+              <div class="t">scripts/*.py</div>
+              <div class="s">
+                アルゴリズム変換・トレース・YouTube動画紐付けなど、public/data
+                を生成・更新するオフラインツール群
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="diagram-note">
+          ※ scripts/ の Python
+          群は実行時にアプリからは呼ばれず、開発者がデータ更新・保守のために手動
+          / actions（自動化）で使う補助ツールという位置づけです。
+        </p>
+      </div>
+    </section>
+
+    <section id="activity">
+      <div class="wrap">
+        <p class="section-kicker">直近の動き</p>
+        <h2>最近のコミット（git log より）</h2>
+        <p class="section-lead">
+          直近15件のコミット。2026年5月〜6月にかけて継続的に更新されており、直近では6月18日を最後にコミットが止まっています。
+        </p>
+        <div class="timeline">
+          <div class="tl-item">
+            <span class="tl-date">2026-06-18</span
+            ><span class="tl-msg"
+              >docs:
+              <code
+                >add memorability-optimized edge 3-style memory sheets</code
+              ></span
+            >
+          </div>
+          <div class="tl-item">
+            <span class="tl-date">2026-06-15</span
+            ><span class="tl-msg"
+              >actions: <code>update manmade algs</code></span
+            >
+          </div>
+          <div class="tl-item">
+            <span class="tl-date">2026-06-10</span
+            ><span class="tl-msg"
+              >docs: <code>add local deployment guide</code></span
+            >
+          </div>
+          <div class="tl-item">
+            <span class="tl-date">2026-06-10</span
+            ><span class="tl-msg"
+              >fix:
+              <code
+                >adapt video extraction to YouTube's new structure
+                (dermasmid/scrapetube#76)</code
+              ></span
+            >
+          </div>
+          <div class="tl-item">
+            <span class="tl-date">2026-06-09</span
+            ><span class="tl-msg"
+              >refactor:
+              <code>change default lettering scheme and mode (#35)</code></span
+            >
+          </div>
+          <div class="tl-item">
+            <span class="tl-date">2026-06-08</span
+            ><span class="tl-msg"
+              >actions: <code>update manmade algs</code></span
+            >
+          </div>
+          <div class="tl-item">
+            <span class="tl-date">2026-06-07</span
+            ><span class="tl-msg"
+              >fix:
+              <code>incorrectly convert tcenter algs in Checker</code></span
+            >
+          </div>
+          <div class="tl-item">
+            <span class="tl-date">2026-06-01</span
+            ><span class="tl-msg"
+              >actions: <code>update manmade algs</code></span
+            >
+          </div>
+          <div class="tl-item">
+            <span class="tl-date">2026-05-28</span
+            ><span class="tl-msg"
+              >refactor: <code>update videos in algToUrl</code></span
+            >
+          </div>
+          <div class="tl-item">
+            <span class="tl-date">2026-05-25</span
+            ><span class="tl-msg"
+              >actions: <code>update manmade algs</code></span
+            >
+          </div>
+          <div class="tl-item">
+            <span class="tl-date">2026-05-18</span
+            ><span class="tl-msg"
+              >actions: <code>update manmade algs</code></span
+            >
+          </div>
+          <div class="tl-item">
+            <span class="tl-date">2026-05-11</span
+            ><span class="tl-msg"
+              >refactor: <code>update dependency in workflow</code></span
+            >
+          </div>
+          <div class="tl-item">
+            <span class="tl-date">2026-05-11</span
+            ><span class="tl-msg"
+              >actions: <code>update manmade algs</code></span
+            >
+          </div>
+          <div class="tl-item">
+            <span class="tl-date">2026-05-04</span
+            ><span class="tl-msg"
+              >actions: <code>update manmade algs</code></span
+            >
+          </div>
+          <div class="tl-item">
+            <span class="tl-date">2026-05-01</span
+            ><span class="tl-msg">feat: <code>add tour guide</code></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <div class="wrap">
+        このページはリポジトリの README・package.json・git
+        log・ソースコードを基に自動生成した紹介ページです（内容の誇張・推測による機能追加はしていません）。<br />
+        License: GPL-3.0 &middot; Copyright (C) 2022-2026 Zixing Wang
+      </div>
+    </footer>
+  </body>
+</html>

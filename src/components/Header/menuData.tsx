@@ -1,6 +1,7 @@
 import { Menu } from "@/types/menu";
 
 const menuData: Menu[] = [
+  { title: "UF Cycle Lab", path: "/learn/uf" },
   {
     title: "common.3BLD",
     submenu: [

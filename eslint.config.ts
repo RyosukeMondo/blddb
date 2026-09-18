@@ -367,6 +367,16 @@ const eslintConfig = defineConfig([
       yoda: [2, "never"],
     },
   },
+  {
+    // Node CLI generator scripts: console and sync IO are the intended interface; TS parser handles undefined identifiers
+    files: ["scripts/**/*.{ts,mts,cts}"],
+    rules: {
+      "no-console": 0,
+      "no-sync": 0,
+      "no-process-exit": 0,
+      "no-undef": 0,
+    },
+  },
 ]);
 
 export default eslintConfig;

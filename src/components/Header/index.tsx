@@ -61,13 +61,18 @@ const Header = () => {
 
   const usePathName = usePathname();
 
+  // The trainer supplies its own compact navigation inside the viewport.
+  if (usePathName === "/learn/uf") {
+    return null;
+  }
+
   return (
     <>
       <header
         className={`header top-0 left-0 z-40 flex w-[100vw] items-center ${
           sticky
             ? "shadow-sticky dark:bg-gray-dark dark:shadow-sticky-dark fixed z-[41] bg-white bg-white/80 backdrop-blur-sm transition"
-            : "absolute bg-transparent"
+            : `absolute ${usePathName === "/learn/uf" ? "dark:bg-gray-dark bg-white" : "bg-transparent"}`
         }`}
       >
         <div className="container">
