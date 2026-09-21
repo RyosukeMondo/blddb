@@ -584,3 +584,65 @@ export function resolveVariantKey(
   }
   return defaultVariantKey(variants, preferMirror);
 }
+
+// --- Reverse lookup: pick two target stickers, resolve which UF case that
+// is. Catalog-independent (no case data), so the same functions serve the
+// picker UI, the catalog module's case lookup, and the verification script.
+// The 22 target edge stickers: every two-letter facelet id except the
+// buffer's own UF/FU pair.
+export const TARGET_FACELET_IDS: string[] = FACELETS.filter(
+  (f) => f.id.length === 2 && f.id !== "UF" && f.id !== "FU",
+).map((f) => f.id);
+const targetFaceletSet = new Set(TARGET_FACELET_IDS);
+export function isValidTargetFacelet(id: string): boolean {
+  return targetFaceletSet.has(id);
+}
+// Two facelet ids name the same edge piece exactly when one is the other's
+// character reversal (RU/UR) -- geometric, not the app's lettering-scheme id
+// system, which uses a different identifier per sticker.
+export function isSamePiece(a: string, b: string): boolean {
+  return a === b || a.split("").reverse().join("") === b;
+}
+export type TargetPairIssue = "buffer" | "invalid" | "same-piece";
+const BUFFER_FACELET_IDS = new Set(["UF", "FU"]);
+// null means the pair is a valid, distinct-piece pair of targets.
+export function validateTargetPair(
+  t1: string,
+  t2: string,
+): TargetPairIssue | null {
+  if (BUFFER_FACELET_IDS.has(t1) || BUFFER_FACELET_IDS.has(t2)) {
+    return "buffer";
+  }
+  if (!isValidTargetFacelet(t1) || !isValidTargetFacelet(t2)) {
+    return "invalid";
+  }
+  if (isSamePiece(t1, t2)) {
+    return "same-piece";
+  }
+  return null;
+}
+export function caseIdForTargets(t1: string, t2: string): string {
+  return `UF-${t1}-${t2}`;
+}
+// Accepts "RU FR", "ru-fr", "RU→FR" (and "RU->FR"): two letter-pairs
+// separated by whitespace, hyphens or an arrow, case-insensitive. Only the
+// app's own facelet ids are recognized here -- lettering-scheme letters are
+// a different id system and are out of scope.
+const FACELET_TOKEN = /^[A-Za-z]{2}$/u;
+const TARGET_PAIR_SPLIT = /[\s\-→>]+/u;
+export function parseTargetPairInput(
+  raw: string,
+): { t1: string; t2: string } | null {
+  const parts = raw
+    .trim()
+    .split(TARGET_PAIR_SPLIT)
+    .filter((part) => part.length > 0);
+  if (parts.length !== 2) {
+    return null;
+  }
+  const [t1, t2] = parts.map((part) => part.toUpperCase());
+  if (!FACELET_TOKEN.test(t1) || !FACELET_TOKEN.test(t2)) {
+    return null;
+  }
+  return { t1, t2 };
+}

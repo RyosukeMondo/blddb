@@ -21,6 +21,11 @@ import {
   computeSymmetry,
   computeSymmetryGroup,
   computeAlgVariants,
+  TARGET_FACELET_IDS,
+  isSamePiece,
+  validateTargetPair,
+  caseIdForTargets,
+  parseTargetPairInput,
   type CaseCore,
   type SymmetryInfo,
 } from "../../src/features/uf-trainer/engine.ts";
@@ -335,6 +340,113 @@ assert.deepEqual(catalog.symmetryStats, {
 });
 console.log(
   `Symmetry: ${recomputedMirrorPure} cases are a pure LR mirror of their partner's assigned alg, ${recomputedMirrorDifferent} differ, ${recomputedSelfMirror} are self-mirrored (both targets on the M plane).`,
+);
+
+// Reverse lookup ("pick stickers"): every ordered pair of the 22 targets on
+// distinct pieces must resolve to an existing case whose cycle is exactly
+// [UF, t1, t2]; same-piece pairs and the buffer must be rejected; the typed
+// parser must accept every documented format and reject garbage.
+assert.equal(TARGET_FACELET_IDS.length, 22);
+const familyIndexById = new Map<string, number>();
+const caseIndexById = new Map<string, number>();
+catalog.families.forEach((family, familyIndex) => {
+  family.cases.forEach((entry, caseIndex) => {
+    familyIndexById.set(entry.id, familyIndex);
+    caseIndexById.set(entry.id, caseIndex);
+  });
+});
+function lookupCaseByTargets(t1: string, t2: string) {
+  if (validateTargetPair(t1, t2)) {
+    return null;
+  }
+  const caseId = caseIdForTargets(t1, t2);
+  if (!ids.has(caseId)) {
+    return null;
+  }
+  return {
+    caseId,
+    familyIndex: familyIndexById.get(caseId),
+    caseIndex: caseIndexById.get(caseId),
+  };
+}
+let validOrderedPairs = 0,
+  samePiecePairs = 0;
+for (const t1 of TARGET_FACELET_IDS) {
+  for (const t2 of TARGET_FACELET_IDS) {
+    if (t1 === t2) {
+      continue;
+    }
+    if (isSamePiece(t1, t2)) {
+      samePiecePairs++;
+      assert.equal(
+        validateTargetPair(t1, t2),
+        "same-piece",
+        `${t1}-${t2}: same-piece pair must be flagged`,
+      );
+      assert.equal(
+        lookupCaseByTargets(t1, t2),
+        null,
+        `${t1}-${t2}: same-piece pair must be rejected`,
+      );
+      continue;
+    }
+    assert.equal(
+      validateTargetPair(t1, t2),
+      null,
+      `${t1}-${t2}: expected a valid distinct-piece pair`,
+    );
+    const result = lookupCaseByTargets(t1, t2);
+    assert.ok(result, `${t1}-${t2}: expected an existing case`);
+    const entry = byId.get(result.caseId);
+    assert.ok(entry, `${t1}-${t2}: case ${result.caseId} must exist`);
+    assert.deepEqual(
+      entry.cycle,
+      ["UF", t1, t2],
+      `${t1}-${t2}: cycle must be exactly [UF, ${t1}, ${t2}]`,
+    );
+    assert.equal(
+      catalog.families[result.familyIndex].cases[result.caseIndex].id,
+      result.caseId,
+      `${t1}-${t2}: familyIndex/caseIndex must resolve back to ${result.caseId}`,
+    );
+    validOrderedPairs++;
+  }
+}
+assert.equal(validOrderedPairs, 440);
+assert.equal(samePiecePairs, 22);
+// Buffer stickers (UF/FU) are never valid targets, whichever side they're on.
+assert.equal(validateTargetPair("UF", "RU"), "buffer");
+assert.equal(validateTargetPair("RU", "FU"), "buffer");
+assert.equal(validateTargetPair("UF", "FU"), "buffer");
+assert.equal(lookupCaseByTargets("UF", "RU"), null);
+// Unknown/garbage facelet ids (corners, centers, nonsense) are rejected too.
+assert.equal(validateTargetPair("ULF", "RU"), "invalid");
+assert.equal(validateTargetPair("U", "RU"), "invalid");
+assert.equal(validateTargetPair("XY", "RU"), "invalid");
+const acceptedFormats: [string, { t1: string; t2: string }][] = [
+  ["RU FR", { t1: "RU", t2: "FR" }],
+  ["ru-fr", { t1: "RU", t2: "FR" }],
+  ["RU→FR", { t1: "RU", t2: "FR" }],
+  ["RU->FR", { t1: "RU", t2: "FR" }],
+  ["  ru   fr  ", { t1: "RU", t2: "FR" }],
+];
+for (const [input, expected] of acceptedFormats) {
+  assert.deepEqual(
+    parseTargetPairInput(input),
+    expected,
+    `parseTargetPairInput(${JSON.stringify(input)})`,
+  );
+}
+const rejectedFormats = ["", "RU", "RU FR EX", "R2 FR", "12 34", "RUFR"];
+for (const input of rejectedFormats) {
+  assert.equal(
+    parseTargetPairInput(input),
+    null,
+    `parseTargetPairInput(${JSON.stringify(input)}) should reject garbage`,
+  );
+}
+console.log(
+  `Reverse lookup: all ${validOrderedPairs} ordered target pairs on distinct pieces resolve to the exact [UF, t1, t2] case with matching familyIndex/caseIndex, all ${samePiecePairs} same-piece pairs and every buffer pairing are rejected, and the typed parser accepts ${acceptedFormats.length} documented formats and rejects ${rejectedFormats.length} garbage inputs.`,
 );
 
 assert.deepEqual(simplifyMoves(["U2", "U'"]).moves, ["U"]);

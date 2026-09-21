@@ -14,7 +14,7 @@ function mergedRelationLabel(relations: string[]): string {
     .map((relation) => relationLabel[relation] || relation)
     .join(" = ");
 }
-function variantNotation(
+export function variantNotation(
   variant: { setup: string[]; a: string[]; b: string[] },
   // eslint-disable-next-line no-unused-vars -- parameter name describes the callback type
   pretty: (s: string) => string,

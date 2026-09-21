@@ -5,6 +5,8 @@ import {
   destination,
   computeSymmetryGroup,
   computeAlgVariants,
+  validateTargetPair,
+  caseIdForTargets,
   type SymmetryRelation,
   type VariantRelation,
 } from "./engine";
@@ -94,4 +96,34 @@ export function algVariants(entry: CatalogCase): AlgVariant[] {
     ...entry,
     ...variant,
   }));
+}
+
+export type TargetLookupResult = {
+  caseId: string;
+  familyIndex: number;
+  caseIndex: number;
+};
+// Reverse lookup for the "pick stickers" picker: two target facelet ids ->
+// the UF case whose cycle is [UF, t1, t2]. Thin catalog-aware wrapper around
+// engine.ts's pure validation/id-construction, which stays catalog-free so
+// the verification script can exercise it directly against catalog.json.
+export function lookupCaseByTargets(
+  t1: string,
+  t2: string,
+): TargetLookupResult | null {
+  if (validateTargetPair(t1, t2)) {
+    return null;
+  }
+  const caseId = caseIdForTargets(t1, t2);
+  const entry = byId.get(caseId);
+  if (!entry) {
+    return null;
+  }
+  return {
+    caseId,
+    familyIndex: entry.familyIndex,
+    caseIndex: FAMILIES[entry.familyIndex].cases.findIndex(
+      (c) => c.id === caseId,
+    ),
+  };
 }
